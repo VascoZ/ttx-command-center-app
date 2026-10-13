@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { one, many } = require('../db');
 const { exerciseContext, audit } = require('../auth');
 const { ah, id, optId, str, oneOf, forbid, notFound, bad } = require('../util');
@@ -127,26 +128,48 @@ const MSG_SQL = `
     LEFT JOIN exercise_roles r ON r.id=em.exercise_role_id
     LEFT JOIN teams t ON t.id=m.team_id`;
 
+// Riwayat chat berhalaman: ?limit=100 (maks 200) & ?before=<id pesan tertua yang sudah dimuat>.
+// Header X-Has-More: 1 bila masih ada pesan yang lebih lama.
 router.get(
   '/:id/messages',
   ah(async (req, res) => {
     const exId = id(req.params.id);
     const ctx = await exerciseContext(exId, req.user);
     const channel = oneOf(req.query.channel, ['general', 'team'], 'general');
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 100));
+    const before = optId(req.query.before);
     let rows;
     if (channel === 'general') {
-      rows = await many(`${MSG_SQL} WHERE m.exercise_id=$1 AND m.team_id IS NULL ORDER BY m.id DESC LIMIT 300`, [exId]);
+      rows = await many(
+        `${MSG_SQL} WHERE m.exercise_id=$1 AND m.team_id IS NULL AND ($2::int IS NULL OR m.id < $2) ORDER BY m.id DESC LIMIT $3`,
+        [exId, before, limit + 1]
+      );
     } else {
       const teamId = ctx.isStaff ? optId(req.query.team_id) || ctx.teamId : ctx.teamId;
       if (!teamId) return res.json([]);
-      rows = await many(`${MSG_SQL} WHERE m.exercise_id=$1 AND m.team_id=$2 ORDER BY m.id DESC LIMIT 300`, [exId, teamId]);
+      rows = await many(
+        `${MSG_SQL} WHERE m.exercise_id=$1 AND m.team_id=$2 AND ($3::int IS NULL OR m.id < $3) ORDER BY m.id DESC LIMIT $4`,
+        [exId, teamId, before, limit + 1]
+      );
     }
-    res.json(rows.reverse());
+    res.set('X-Has-More', rows.length > limit ? '1' : '0');
+    res.json(rows.slice(0, limit).reverse());
   })
 );
 
+// Batas kirim pesan per pengguna (mencegah spam membebani database & peserta lain).
+const messageLimiter = rateLimit({
+  windowMs: 10 * 1000,
+  limit: parseInt(process.env.CHAT_RATE_LIMIT || '20', 10),
+  keyGenerator: (req) => `u:${req.user.id}`,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Terlalu banyak pesan dalam waktu singkat. Tunggu beberapa detik.' },
+});
+
 router.post(
   '/:id/messages',
+  messageLimiter,
   ah(async (req, res) => {
     const exId = id(req.params.id);
     const ctx = await exerciseContext(exId, req.user);
@@ -157,7 +180,8 @@ router.post(
     let teamId = null;
     if (channel === 'team') {
       teamId = ctx.isStaff ? optId(req.body.team_id) || ctx.teamId : ctx.teamId;
-      if (!teamId) bad('Anda belum tergabung dalam tim');
+      if (!teamId) bad(ctx.isStaff ? 'Pilih tim tujuan pesan' : 'Anda belum tergabung dalam tim');
+      if (!(await one('SELECT 1 FROM teams WHERE id=$1 AND exercise_id=$2', [teamId, exId]))) bad('Tim tidak ditemukan di latihan ini');
     }
     const m0 = await one(
       `INSERT INTO messages(exercise_id, team_id, user_id, kind, body, sim_time_sec) VALUES ($1,$2,$3,'chat',$4,$5) RETURNING id`,

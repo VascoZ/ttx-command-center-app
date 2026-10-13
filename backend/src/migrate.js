@@ -395,6 +395,16 @@ ALTER TABLE exercises ADD COLUMN IF NOT EXISTS briefing TEXT;
 ALTER TABLE exercises ADD COLUMN IF NOT EXISTS reminded_at TIMESTAMPTZ;
 `,
   },
+  {
+    // Indeks untuk chat berhalaman, pembersihan audit log, dan pengecekan scheduler.
+    name: '005_perf_indexes',
+    sql: `
+CREATE INDEX IF NOT EXISTS idx_msg_ex_team_id ON messages(exercise_id, team_id, id);
+DROP INDEX IF EXISTS idx_msg_ex;
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_exercises_active ON exercises(status) WHERE status IN ('running','draft');
+`,
+  },
 ];
 
 async function migrate() {

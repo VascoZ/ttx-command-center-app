@@ -3,11 +3,23 @@ import { useEffect, useRef, useState } from 'react';
 
 let socket = null;
 const listeners = new Set();
+// Naik setiap kali socket tersambung KEMBALI. Event yang terkirim saat koneksi putus tidak diulang server,
+// jadi tampilan yang memakai useResync() memuat ulang datanya dari API.
+let resyncVersion = 0;
+const resyncListeners = new Set();
 
 export function connectSocket(token) {
   if (socket) socket.disconnect();
   socket = io({ path: '/socket.io', auth: { token }, transports: ['websocket', 'polling'] });
-  socket.on('connect', () => listeners.forEach((fn) => fn(true)));
+  let connectedOnce = false;
+  socket.on('connect', () => {
+    listeners.forEach((fn) => fn(true));
+    if (connectedOnce) {
+      resyncVersion += 1;
+      resyncListeners.forEach((fn) => fn(resyncVersion));
+    }
+    connectedOnce = true;
+  });
   socket.on('disconnect', () => listeners.forEach((fn) => fn(false)));
   return socket;
 }
@@ -30,6 +42,16 @@ export function useConnected() {
     return () => listeners.delete(setC);
   }, []);
   return c;
+}
+
+/** Nomor versi yang berubah setiap koneksi real-time pulih; pakai sebagai dependensi pemuatan data. */
+export function useResync() {
+  const [v, setV] = useState(resyncVersion);
+  useEffect(() => {
+    resyncListeners.add(setV);
+    return () => resyncListeners.delete(setV);
+  }, []);
+  return v;
 }
 
 /** Dengarkan event socket; handler selalu versi terbaru. */

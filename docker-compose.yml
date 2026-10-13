@@ -1,9 +1,30 @@
 name: ttx-command-center
 
+# Log container dibatasi: driver "local" (terkompresi) maks LOG_MAX_SIZE × LOG_MAX_FILE per container.
+# Tanpa ini log Docker tumbuh tanpa batas sampai disk penuh. Tetap bisa dibaca dengan `docker compose logs`.
+x-logging: &logging
+  logging:
+    driver: local
+    options:
+      max-size: ${LOG_MAX_SIZE:-10m}
+      max-file: "${LOG_MAX_FILE:-3}"
+
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    <<: *logging
+    # shared_buffers ≈ 25% memori container; catat query yang lebih lambat dari 500 ms untuk deteksi dini
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-256MB}
+      - -c
+      - log_min_duration_statement=${PG_SLOW_QUERY_MS:-500}
+    deploy:
+      resources:
+        limits:
+          memory: ${DB_MEMORY_LIMIT:-1g}
     environment:
       POSTGRES_DB: ttx
       POSTGRES_USER: ttx
@@ -19,6 +40,12 @@ services:
   api:
     build: ./backend
     restart: unless-stopped
+    <<: *logging
+    deploy:
+      resources:
+        limits:
+          memory: ${API_MEMORY_LIMIT:-512m}
+          cpus: "${API_CPU_LIMIT:-2}"
     depends_on:
       db:
         condition: service_healthy
@@ -47,6 +74,10 @@ services:
       JOIN_RATE_LIMIT: ${JOIN_RATE_LIMIT:-20}
       JOIN_IP_RATE_LIMIT: ${JOIN_IP_RATE_LIMIT:-200}
       REMIND_BEFORE_MIN: ${REMIND_BEFORE_MIN:-15}
+      CHAT_RATE_LIMIT: ${CHAT_RATE_LIMIT:-20}
+      AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-180}
+      # heap Node di bawah batas memori container agar GC bekerja sebelum container dimatikan
+      NODE_OPTIONS: --max-old-space-size=${API_HEAP_MB:-384}
       BACKUP_DIR: /backups
     volumes:
       - uploads:/app/uploads
@@ -55,6 +86,11 @@ services:
   web:
     build: ./frontend
     restart: unless-stopped
+    <<: *logging
+    deploy:
+      resources:
+        limits:
+          memory: 128m
     depends_on:
       - api
     ports:
@@ -65,6 +101,11 @@ services:
   backup:
     image: postgres:16-alpine
     restart: unless-stopped
+    <<: *logging
+    deploy:
+      resources:
+        limits:
+          memory: 256m
     depends_on:
       db:
         condition: service_healthy
@@ -86,6 +127,11 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    <<: *logging
+    deploy:
+      resources:
+        limits:
+          memory: 128m
     profiles: ["https"]
     depends_on:
       - web
@@ -106,6 +152,7 @@ services:
   ollama:
     image: ollama/ollama:latest
     restart: unless-stopped
+    <<: *logging
     profiles: ["ai"]
     volumes:
       - ollama:/root/.ollama

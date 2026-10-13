@@ -3,7 +3,7 @@ import { api } from '../../api';
 import { useAsync, useAction, useConfirm, Modal, Field, Icon, Empty } from '../../ui';
 import { MEMBER_ROLE, fmtDateTime } from '../../format';
 import { useAuth } from '../../auth';
-import { useSocketEvent } from '../../socket';
+import { useSocketEvent, useResync } from '../../socket';
 
 export function RoleFormFields({ f, set }) {
   return (
@@ -135,7 +135,8 @@ function PublishCard({ ex }) {
 }
 
 function ApplicationsCard({ ex }) {
-  const { data, reload } = useAsync(() => api.get(`/exercises/${ex.id}/applications`), [ex.id, ex.members.length]);
+  const resync = useResync();
+  const { data, reload } = useAsync(() => api.get(`/exercises/${ex.id}/applications`), [ex.id, ex.members.length, resync]);
   const [run, busy] = useAction();
   const [roleFor, setRoleFor] = useState({});
   const [rejecting, setRejecting] = useState(null);

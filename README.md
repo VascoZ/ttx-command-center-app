@@ -152,6 +152,14 @@ docker compose exec -T api tar xzf - -C /app/uploads < backups/uploads-20261012-
 
 Di Git Bash (Windows), awali perintah yang memuat path kontainer dengan `MSYS_NO_PATHCONV=1` agar `/app/uploads` tidak diubah menjadi path Windows.
 
+**Beban server & log**
+- Log tiap container memakai driver `local` (terkompresi) dengan batas `LOG_MAX_SIZE` × `LOG_MAX_FILE` (default 10 MB × 3), sehingga disk tidak pernah penuh karena log. Tetap bisa dibaca dengan `docker compose logs`.
+- Nginx tidak mencatat aset statis, ikon, dan health check; request halaman, API, dan error tetap tercatat.
+- Batas memori per container (API 512 MB, database 1 GB, web 128 MB, backup 256 MB) dapat diubah di `.env`. PostgreSQL mencatat query yang lebih lambat dari 500 ms (`PG_SLOW_QUERY_MS`) untuk deteksi dini.
+- Scheduler mengecek inject tiap 1 detik hanya saat ada latihan berjalan; saat diam tiap 5 detik.
+- Audit log lebih tua dari `AUDIT_RETENTION_DAYS` hari (default 180) dihapus otomatis setiap hari. Timeline, chat, dan keputusan latihan **tidak** dihapus karena dipakai untuk laporan AAR; arsipkan latihan lama lewat ekspor JSON bila perlu.
+- Chat dimuat per 100 pesan (tombol *Muat pesan sebelumnya*) dan dibatasi `CHAT_RATE_LIMIT` pesan per orang per 10 detik (default 20). Saat koneksi real-time pulih, chat, inbox, keputusan, dan timeline dimuat ulang otomatis.
+
 **Akun & keamanan**
 - Lupa password: admin membuka **Pengguna → Edit** lalu mengisi password baru. Tidak ada reset lewat email karena aplikasi dirancang bisa berjalan tanpa internet.
 - Pembatasan percobaan hanya menghitung percobaan **gagal** (login per akun, token per akun, serta batas per IP), sehingga banyak peserta dari satu Wi-Fi tidak saling memblokir. Atur lewat variabel `*_RATE_LIMIT` di `.env`.
@@ -186,13 +194,15 @@ frontend/src
 
 ## Uji otomatis
 
-`tests/api-e2e.js` menguji 139 skenario API end-to-end (keamanan & pembatasan percobaan, login, pendaftaran, token tim, undangan, koordinator, lamaran, peran wajib, kesiapan, pengingat & isolasi antarinstansi, generator, siklus latihan, filter inject per peran, alur persetujuan, eskalasi, chat, evaluasi, laporan, admin) terhadap instance baru dengan data demo:
+`tests/api-e2e.js` menguji 143 skenario API end-to-end (keamanan & pembatasan percobaan, login, pendaftaran, token tim, undangan, koordinator, lamaran, peran wajib, kesiapan, pengingat & isolasi antarinstansi, generator, siklus latihan, filter inject per peran, alur persetujuan, eskalasi, chat, evaluasi, laporan, admin) terhadap instance baru dengan data demo:
 
 ```bash
 cd tests && npm init -y >/dev/null && npm i socket.io-client playwright && npx playwright install chromium
 BASE=http://localhost:8080 ADMIN_PASSWORD=... node api-e2e.js         # API (butuh SEED_DEMO=true, database baru)
 BASE=http://localhost:8080 ADMIN_PASSWORD=... USERS=100 node load-test.js   # uji beban, membersihkan datanya sendiri
 BASE=http://localhost:8080 ADMIN_PASSWORD=... node ui-uat.js          # uji browser (Chromium): token → lamaran → siap → mulai → jawab inject
+BASE=http://localhost:8080 ADMIN_PASSWORD=... node ui-chat.js         # uji browser chat: real-time, isolasi tim, kanal umum, fasilitator
+node ui-chat-reconnect.js                                              # putus-sambung koneksi sungguhan (mematikan web sebentar)
 ```
 
 `api-e2e.js` dan `ui-uat.js` mengubah data demo (latihan DEMO dimulai/diakhiri), jadi jalankan di database uji, bukan produksi.

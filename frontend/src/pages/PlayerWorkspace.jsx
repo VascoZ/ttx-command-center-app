@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
-import { useSocketEvent } from '../socket';
+import { useSocketEvent, useResync } from '../socket';
 import { useToast, useAction, beep, Empty, Field, Icon, RoleTag, Stars, Countdown } from '../ui';
 import { INJECT_TYPES, PRIORITY, fmtSim } from '../format';
 import { InjectBody } from '../components/InjectView';
@@ -156,6 +156,7 @@ export default function PlayerWorkspace({ ex }) {
   const myRole = ex.roles.find((r) => r.id === ex.me.exercise_role_id);
   const myTeam = ex.teams.find((t) => t.id === ex.me.team_id);
 
+  const resync = useResync();
   const load = useCallback(async () => {
     try {
       const list = await api.get(`/exercises/${ex.id}/my-injects`);
@@ -177,7 +178,7 @@ export default function PlayerWorkspace({ ex }) {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ex.id, ex.state.status, ex.me.exercise_role_id, ex.me.team_id]);
+  }, [ex.id, ex.state.status, ex.me.exercise_role_id, ex.me.team_id, resync]);
 
   useSocketEvent('injects:changed', () => load());
   useSocketEvent('response:new', (r) => r.exercise_id === ex.id && load());

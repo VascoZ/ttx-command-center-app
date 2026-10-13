@@ -36,13 +36,45 @@ async function remind() {
   }
 }
 
-let ticks = 0;
+/** Hapus audit log yang lebih tua dari AUDIT_RETENTION_DAYS (default 180; 0 = simpan selamanya). */
+const AUDIT_RETENTION_DAYS = parseInt(process.env.AUDIT_RETENTION_DAYS || '180', 10);
+async function cleanup() {
+  if (AUDIT_RETENTION_DAYS > 0) {
+    const r = await many(
+      `DELETE FROM audit_logs WHERE created_at < now() - make_interval(days => $1) RETURNING id`,
+      [AUDIT_RETENTION_DAYS]
+    );
+    if (r.length) console.log(`[cleanup] ${r.length} audit log lebih dari ${AUDIT_RETENTION_DAYS} hari dihapus`);
+  }
+}
+
+// Scheduler adaptif: cek inject tiap detik hanya saat ada latihan berjalan; saat semua diam, cek tiap 5 detik.
+// wake() dipanggil saat latihan dimulai/dilanjutkan/dimajukan agar tidak menunggu.
+const IDLE_MS = 5000;
+let idleUntil = 0;
+let nextRemind = 0;
+let nextCleanup = Date.now() + 60 * 1000;
+function wake() {
+  idleUntil = 0;
+}
+
 let running = false;
 async function tick() {
   if (running) return;
   running = true;
   try {
+    const now = Date.now();
+    if (now >= nextRemind) {
+      nextRemind = now + 5000;
+      await remind();
+    }
+    if (now >= nextCleanup) {
+      nextCleanup = now + 24 * 3600 * 1000;
+      await cleanup();
+    }
+    if (now < idleUntil) return;
     const exercises = await many(`SELECT * FROM exercises WHERE status='running'`);
+    if (!exercises.length) idleUntil = now + IDLE_MS;
     for (const ex of exercises) {
       const sim = simSeconds(ex);
       const due = await many(
@@ -56,7 +88,6 @@ async function tick() {
         await dispatchInject(inj);
       }
     }
-    if (ticks++ % 5 === 0) await remind();
   } catch (e) {
     console.error('[scheduler]', e.message);
   } finally {
@@ -66,7 +97,7 @@ async function tick() {
 
 function start() {
   setInterval(tick, 1000);
-  console.log('[scheduler] aktif (interval 1 detik)');
+  console.log('[scheduler] aktif (1 detik saat latihan berjalan, 5 detik saat diam)');
 }
 
-module.exports = { start, tick, dispatchInject };
+module.exports = { start, tick, wake, dispatchInject };

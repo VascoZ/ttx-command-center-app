@@ -5,7 +5,7 @@ const { ah, id, optId, str, oneOf, bool, forbid, notFound, bad } = require('../u
 const { createExercise, copyPresetRoles } = require('../services');
 const { simSeconds, publicState } = require('../simclock');
 const { emit, logEvent, presenceList } = require('../realtime');
-const { dispatchInject } = require('../scheduler');
+const { dispatchInject, wake } = require('../scheduler');
 const { roleFields } = require('./roles');
 
 const router = express.Router(); // /api/exercises
@@ -245,6 +245,7 @@ async function transition(req, res, action) {
     default:
       bad('Aksi tidak dikenal');
   }
+  if (action === 'start' || action === 'resume') wake();
   await logEvent(exId, `exercise_${action}`, { by: req.user.name, dropped: dropped.map((p) => p.name) }, req.user.id, simSeconds(updated));
   await audit(req, action, 'exercise', exId, dropped.length ? { dropped: dropped.map((p) => p.user_id) } : {});
   broadcastState(updated);
@@ -295,6 +296,7 @@ router.post(
       `UPDATE exercises SET sim_elapsed_sec=$2, resumed_at=CASE WHEN status='running' THEN now() ELSE NULL END WHERE id=$1 RETURNING *`,
       [exId, target]
     );
+    wake();
     await logEvent(exId, 'clock_jump', { from_sec: sim, to_sec: target }, req.user.id, target);
     broadcastState(updated);
     res.json(publicState(updated));

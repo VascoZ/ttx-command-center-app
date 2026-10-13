@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api';
-import { useSocketEvent } from '../socket';
+import { useSocketEvent, useResync } from '../socket';
 import { useToast, Empty, Icon, RoleTag } from '../ui';
 import { fmtSim, eventText, eventKind, MEMBER_ROLE } from '../format';
 import { InjectTable } from '../components/Injects';
@@ -72,11 +72,12 @@ export default function Console({ ex, simNow, online }) {
   const [injects, setInjects] = useState([]);
   const [events, setEvents] = useState([]);
   const toast = useToast();
+  const resync = useResync();
 
   useEffect(() => {
     api.get(`/exercises/${ex.id}/injects`).then(setInjects).catch(() => {});
     api.get(`/exercises/${ex.id}/timeline`).then(setEvents).catch(() => {});
-  }, [ex.id, ex.state.status]);
+  }, [ex.id, ex.state.status, resync]);
 
   const upsertInject = (i) =>
     setInjects((l) => {

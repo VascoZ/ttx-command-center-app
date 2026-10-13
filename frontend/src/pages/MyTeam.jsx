@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { useSocketEvent } from '../socket';
+import { useSocketEvent, useResync } from '../socket';
 import { useAsync, useAction, useConfirm, Loading, Field, Icon, StatusPill, Empty, RoleTag, Countdown } from '../ui';
 import { fmtDateTime } from '../format';
 
@@ -139,7 +139,8 @@ function TeamProgress({ members }) {
 }
 
 function OpenExercises({ canApply, coordinator }) {
-  const { data, loading, reload } = useAsync(() => api.get('/exercises/open'), []);
+  const resync = useResync();
+  const { data, loading, reload } = useAsync(() => api.get('/exercises/open'), [resync]);
   const [run, busy] = useAction();
   const confirm = useConfirm();
   useSocketEvent('application:updated', () => reload());

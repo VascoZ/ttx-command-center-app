@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api } from '../api';
-import { useSocketEvent } from '../socket';
+import { useSocketEvent, useResync } from '../socket';
 import { useAsync, useAction, Modal, Field, Empty, Icon, RoleTag } from '../ui';
 import { DECISION_STATUS, STATEMENT_CHANNEL, fmtSim } from '../format';
 
@@ -38,7 +38,8 @@ export function DecisionForm({ ex, injectId, onClose, onDone }) {
 }
 
 export function DecisionList({ ex, compact }) {
-  const { data, setData } = useAsync(() => api.get(`/exercises/${ex.id}/decisions`), [ex.id]);
+  const resync = useResync();
+  const { data, setData } = useAsync(() => api.get(`/exercises/${ex.id}/decisions`), [ex.id, resync]);
   const [run, busy] = useAction();
   const [review, setReview] = useState(null);
   const [note, setNote] = useState('');
@@ -142,7 +143,8 @@ export function StatementForm({ ex, onClose }) {
 }
 
 export function StatementList({ ex, compact }) {
-  const { data, setData } = useAsync(() => api.get(`/exercises/${ex.id}/statements`), [ex.id]);
+  const resync = useResync();
+  const { data, setData } = useAsync(() => api.get(`/exercises/${ex.id}/statements`), [ex.id, resync]);
   const [show, setShow] = useState(false);
   useSocketEvent('statement:new', (s) => s.exercise_id === ex.id && setData((l) => upsert(l, s)));
   const live = ex.state && ['running', 'paused'].includes(ex.state.status);
@@ -201,7 +203,8 @@ export function EscalationForm({ ex, onClose }) {
 }
 
 export function EscalationList({ ex, compact }) {
-  const { data, setData } = useAsync(() => api.get(`/exercises/${ex.id}/escalations`), [ex.id]);
+  const resync = useResync();
+  const { data, setData } = useAsync(() => api.get(`/exercises/${ex.id}/escalations`), [ex.id, resync]);
   const [show, setShow] = useState(false);
   const [run] = useAction();
   useSocketEvent('escalation:new', (e) => e.exercise_id === ex.id && setData((l) => upsert(l, e)));

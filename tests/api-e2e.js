@@ -310,6 +310,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const bc = await api(fac, 'POST', `/exercises/${exId}/broadcast`, { body: 'Semua tim: rapat di posko' });
   ok(bc.status === 201, 'broadcast fasilitator');
 
+  // chat berhalaman & batas spam
+  for (let i = 1; i <= 3; i++) await api(csirt, 'POST', `/exercises/${exId}/messages`, { channel: 'team', body: `Halaman ${i}` });
+  const pg1 = await api(csirt, 'GET', `/exercises/${exId}/messages?channel=team&limit=2`);
+  ok(pg1.data.length === 2 && pg1.data[1].body === 'Halaman 3', 'chat: halaman terbaru berisi pesan paling baru');
+  const pg2 = await api(csirt, 'GET', `/exercises/${exId}/messages?channel=team&limit=2&before=${pg1.data[0].id}`);
+  ok(pg2.data.length === 2 && pg2.data[pg2.data.length - 1].id < pg1.data[0].id, 'chat: muat pesan sebelumnya');
+  let spam = 0;
+  for (let i = 0; i < 25; i++) if ((await api(evalr, 'POST', `/exercises/${exId}/messages`, { channel: 'general', body: `spam ${i}` })).status === 429) spam++;
+  ok(spam >= 5, `chat: pesan beruntun dibatasi (${spam} dari 25 ditolak)`);
+  ok((await api(csirt, 'POST', `/exercises/${exId}/messages`, { channel: 'team', body: 'Pengguna lain tetap bisa chat' })).status === 201, 'chat: batas spam per orang, tidak memblokir orang lain');
+
   // evaluation
   const objs = det.data.objectives;
   const obs = await api(evalr, 'POST', `/exercises/${exId}/observations`, { category: 'perbaikan', body: 'Eskalasi lambat', team_id: det.data.teams[0].id });
