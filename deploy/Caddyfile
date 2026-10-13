@@ -1,0 +1,16 @@
+# Reverse proxy HTTPS di depan aplikasi (profil compose "https").
+#   DOMAIN : nama host yang diakses peserta, mis. ttx.pemkab.go.id atau 10.0.0.5
+#   TLS    : "internal" = sertifikat dari CA lokal Caddy (jaringan internal/tanpa internet;
+#            pasang root CA Caddy di perangkat peserta agar tidak muncul peringatan)
+#            atau alamat email = sertifikat Let's Encrypt otomatis (domain publik, port 80/443 terbuka)
+{$DOMAIN:localhost} {
+	tls {$TLS:internal}
+	encode gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	reverse_proxy web:80
+}

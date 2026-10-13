@@ -1,0 +1,118 @@
+name: ttx-command-center
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ttx
+      POSTGRES_USER: ttx
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Isi DB_PASSWORD di file .env (jalankan node scripts/init-env.js)}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ttx -d ttx"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://ttx:${DB_PASSWORD}@db:5432/ttx
+      PORT: 4000
+      JWT_SECRET: ${JWT_SECRET:?Isi JWT_SECRET di file .env (jalankan node scripts/init-env.js)}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@ttx.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Isi ADMIN_PASSWORD di file .env}
+      ORG_NAME: ${ORG_NAME:-}
+      SEED_DEMO: ${SEED_DEMO:-false}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-demo12345}
+      AI_PROVIDER: ${AI_PROVIDER:-builtin}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5-5}
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1}
+      UPLOAD_DIR: /app/uploads
+      UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-20}
+      # 1 = hanya nginx (web) di depan API; 2 = profil https (Caddy + nginx)
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      LOGIN_RATE_LIMIT: ${LOGIN_RATE_LIMIT:-10}
+      LOGIN_IP_RATE_LIMIT: ${LOGIN_IP_RATE_LIMIT:-200}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
+      REGISTER_RATE_LIMIT: ${REGISTER_RATE_LIMIT:-200}
+      JOIN_RATE_LIMIT: ${JOIN_RATE_LIMIT:-20}
+      JOIN_IP_RATE_LIMIT: ${JOIN_IP_RATE_LIMIT:-200}
+      REMIND_BEFORE_MIN: ${REMIND_BEFORE_MIN:-15}
+      BACKUP_DIR: /backups
+    volumes:
+      - uploads:/app/uploads
+      - ./backups:/backups:ro
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      # Saat memakai profil https, set WEB_BIND=127.0.0.1 agar HTTP biasa tidak bisa diakses dari jaringan.
+      - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-8080}:80"
+
+  # Backup otomatis database + lampiran ke folder ./backups (rotasi BACKUP_KEEP_DAYS hari).
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: ttx
+      PGDATABASE: ttx
+      PGPASSWORD: ${DB_PASSWORD}
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - ./backups:/backups
+      - uploads:/uploads:ro
+      - ./deploy/backup.sh:/backup.sh:ro
+    entrypoint: ["/bin/sh", "/backup.sh"]
+
+  # Opsional: HTTPS otomatis. Jalankan dengan: docker compose --profile https up -d
+  # Atur DOMAIN, TLS, TRUST_PROXY=2, dan WEB_BIND=127.0.0.1 di .env.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    profiles: ["https"]
+    depends_on:
+      - web
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+      TLS: ${TLS:-internal}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  # Opsional: model AI lokal untuk jaringan tanpa internet.
+  # Jalankan dengan: docker compose --profile ai up -d
+  # lalu: docker compose exec ollama ollama pull llama3.1
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    profiles: ["ai"]
+    volumes:
+      - ollama:/root/.ollama
+
+volumes:
+  pgdata:
+  uploads:
+  ollama:
+  caddy_data:
+  caddy_config:
