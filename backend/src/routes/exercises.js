@@ -51,7 +51,8 @@ router.get(
         ORDER BY CASE e.status WHEN 'running' THEN 0 WHEN 'paused' THEN 1 WHEN 'draft' THEN 2 ELSE 3 END, e.created_at DESC`,
       [req.user.id, isAdmin]
     );
-    res.json(rows.map((r) => ({ ...r, sim_now_sec: simSeconds(r) })));
+    // tautan layar penonton hanya untuk fasilitator (diambil lewat endpoint display)
+    res.json(rows.map(({ display_key, ...r }) => ({ ...r, sim_now_sec: simSeconds(r) })));
   })
 );
 
@@ -84,7 +85,7 @@ router.get(
   ah(async (req, res) => {
     const exId = id(req.params.id);
     const ctx = await ctxFor(req, exId);
-    const ex = ctx.ex;
+    const { display_key, ...ex } = ctx.ex;
     const [teams, roles, members, objectives] = await Promise.all([
       many('SELECT id, exercise_id, name, color, org_team_id FROM teams WHERE exercise_id=$1 ORDER BY id', [exId]),
       many('SELECT * FROM exercise_roles WHERE exercise_id=$1 ORDER BY sort, id', [exId]),
@@ -105,6 +106,7 @@ router.get(
       members: ctx.isStaff ? members : members.map((m) => ({ id: m.id, user_id: m.user_id, name: m.name, role: m.role, team_id: m.team_id, exercise_role_id: m.exercise_role_id, ready_at: m.ready_at })),
       objectives,
       online: presenceList(exId),
+      display_key: ctx.isFacilitator ? display_key : undefined,
       me: {
         user_id: req.user.id,
         member_role: ctx.member ? ctx.member.role : ctx.isFacilitator ? 'facilitator' : null,

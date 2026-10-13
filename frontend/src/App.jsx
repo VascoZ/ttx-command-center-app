@@ -19,6 +19,7 @@ import Profile from './pages/Profile';
 import MyTeam from './pages/MyTeam';
 import OrgTeams from './pages/OrgTeams';
 import Notifier from './components/Notifier';
+import Display from './pages/Display';
 
 function Sidebar({ open, onClose }) {
   const { user, logout } = useAuth();
@@ -97,8 +98,24 @@ export default function App() {
   const loc = useLocation();
   useEffect(() => setOpen(false), [loc.pathname]);
 
+  // Layar penonton via tautan berkunci: tanpa login, tanpa sidebar
+  if (loc.pathname.startsWith('/display/')) {
+    return (
+      <Routes>
+        <Route path="/display/:key" element={<Display publicKey />} />
+      </Routes>
+    );
+  }
   if (loading) return <Loading label="Menyiapkan aplikasi…" />;
   if (!user) return <Login />;
+  // Layar penonton untuk staf yang login: layar penuh tanpa sidebar
+  if (/^\/exercises\/\d+\/display\/?$/.test(loc.pathname)) {
+    return (
+      <Routes>
+        <Route path="/exercises/:id/display" element={<Display />} />
+      </Routes>
+    );
+  }
 
   return (
     <div className="app">

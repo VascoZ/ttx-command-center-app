@@ -405,6 +405,14 @@ CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_exercises_active ON exercises(status) WHERE status IN ('running','draft');
 `,
   },
+  {
+    // Tautan layar penonton (tanpa login); NULL = tidak aktif.
+    name: '006_display_key',
+    sql: `
+ALTER TABLE exercises ADD COLUMN IF NOT EXISTS display_key TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_exercises_display_key ON exercises(display_key) WHERE display_key IS NOT NULL;
+`,
+  },
 ];
 
 async function migrate() {

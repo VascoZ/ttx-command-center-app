@@ -95,6 +95,11 @@ Peserta demo Pemkab sudah diterima dan berstatus siap, jadi latihan DEMO bisa la
 - Workspace peserta: inbox dengan penanda belum dibaca, tampilan sesuai jenis inject, respons per tim, log keputusan dengan alur persetujuan, kanal publik, eskalasi, chat tim dan umum, serta broadcast fasilitator.
 - Konsol fasilitator menampilkan KPI live, status per peran/tim, peserta online, dan umpan aktivitas.
 
+**Layar penonton (proyektor / TV)**
+- Tombol **Layar** di header latihan membuka tampilan besar: jam simulasi, hitung mundur inject berikutnya, progres tiap instansi (kesiapan, inject dijawab, keputusan, eskalasi, pernyataan), timeline inject, kanal publik, pengumuman fasilitator, dan aktivitas terbaru. Diperbarui otomatis tiap 4 detik.
+- Fasilitator dapat membuat **tautan tanpa login** untuk TV/proyektor atau penonton, dan mencabutnya kapan saja.
+- Aman ditayangkan: isi inject, isi respons & keputusan, perihal eskalasi, catatan evaluator, serta nama/email peserta tidak pernah dikirim ke layar.
+
 **Evaluasi & laporan**
 - Observasi evaluator bertimestamp (kekuatan / perbaikan / catatan) yang bisa dikaitkan ke tim, peran, inject, dan objective.
 - Matriks skor objective × tim (1–5) dengan komentar, plus survei kepuasan dan realisme dari peserta.
@@ -194,7 +199,7 @@ frontend/src
 
 ## Uji otomatis
 
-`tests/api-e2e.js` menguji 143 skenario API end-to-end (keamanan & pembatasan percobaan, login, pendaftaran, token tim, undangan, koordinator, lamaran, peran wajib, kesiapan, pengingat & isolasi antarinstansi, generator, siklus latihan, filter inject per peran, alur persetujuan, eskalasi, chat, evaluasi, laporan, admin) terhadap instance baru dengan data demo:
+`tests/api-e2e.js` menguji 154 skenario API end-to-end (keamanan, layar penonton & pembatasan percobaan, login, pendaftaran, token tim, undangan, koordinator, lamaran, peran wajib, kesiapan, pengingat & isolasi antarinstansi, generator, siklus latihan, filter inject per peran, alur persetujuan, eskalasi, chat, evaluasi, laporan, admin) terhadap instance baru dengan data demo:
 
 ```bash
 cd tests && npm init -y >/dev/null && npm i socket.io-client playwright && npx playwright install chromium
@@ -203,6 +208,7 @@ BASE=http://localhost:8080 ADMIN_PASSWORD=... USERS=100 node load-test.js   # uj
 BASE=http://localhost:8080 ADMIN_PASSWORD=... node ui-uat.js          # uji browser (Chromium): token → lamaran → siap → mulai → jawab inject
 BASE=http://localhost:8080 ADMIN_PASSWORD=... node ui-chat.js         # uji browser chat: real-time, isolasi tim, kanal umum, fasilitator
 node ui-chat-reconnect.js                                              # putus-sambung koneksi sungguhan (mematikan web sebentar)
+BASE=http://localhost:8080 node ui-display.js                          # layar penonton: tautan tanpa login, pembaruan otomatis, ponsel
 ```
 
 `api-e2e.js` dan `ui-uat.js` mengubah data demo (latihan DEMO dimulai/diakhiri), jadi jalankan di database uji, bukan produksi.

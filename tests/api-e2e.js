@@ -350,6 +350,25 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const fb = await api(humas, 'POST', `/exercises/${exId}/feedback`, { rating: 5, realism: 4, comments: 'Sangat realistis' });
   ok(fb.status === 200, 'umpan balik peserta');
 
+  console.log('Layar penonton');
+  ok((await api(humas, 'POST', `/exercises/${exId}/display-key`)).status === 403, 'peserta tidak bisa membuat tautan layar');
+  ok((await api(humas, 'GET', `/exercises/${exId}/display`)).status === 403, 'peserta tidak bisa membuka layar staf');
+  const dk = await api(fac, 'POST', `/exercises/${exId}/display-key`);
+  ok(!!dk.data.display_key, 'fasilitator membuat tautan layar');
+  ok((await api(humas, 'GET', `/exercises/${exId}`)).data.display_key === undefined && !(await api(humas, 'GET', '/exercises')).data.some((e) => 'display_key' in e), 'kunci layar tidak terlihat peserta');
+  const pubR = await fetch(`${BASE}/api/display/${dk.data.display_key}`);
+  const pub = await pubR.json();
+  ok(pubR.status === 200 && pub.teams.length === 2 && pub.injects.sent > 0 && pub.statements.length === 1 && pub.activity.length > 0, 'layar publik dapat dibuka tanpa login');
+  const pubText = JSON.stringify(pub);
+  ok(!/"content"|"question"|"options"/.test(pubText), 'layar: isi inject tidak dikirim');
+  ok(!pubText.includes('Terbitkan siaran pers') && !pubText.includes('Backup terenkripsi') && !pubText.includes('Eskalasi lambat'), 'layar: isi keputusan, perihal eskalasi, catatan evaluator tidak dikirim');
+  ok(!pubText.includes('Rina Anggraini') && !pubText.includes('Walikota Uji') && !pubText.includes('@'), 'layar: nama & email peserta tidak dikirim');
+  const pkStats = pub.teams.find((t) => t.name === 'Pemkot Mekarsari');
+  ok(pkStats && pkStats.decisions === 1 && pkStats.decisions_approved === 1 && pkStats.injects_required >= pkStats.injects_answered, 'layar: statistik per instansi');
+  await api(fac, 'DELETE', `/exercises/${exId}/display-key`);
+  ok((await fetch(`${BASE}/api/display/${dk.data.display_key}`)).status === 404, 'tautan layar yang dicabut tidak berlaku');
+  ok((await fetch(`${BASE}/api/display/tebak-tebakan-kunci-acak-123`)).status === 404, 'kunci layar asal-asalan ditolak');
+
   console.log('Report');
   const rep = await api(fac, 'GET', `/exercises/${exId}/report`);
   ok(rep.status === 200 && rep.data.summary.decisions === 3 && rep.data.summary.statements === 1, 'laporan AAR');

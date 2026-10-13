@@ -28,6 +28,7 @@ app.get('/api/health', async (req, res) => {
 
 // Rute publik / campuran
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/display', require('./routes/display').displayPublic); // layar penonton via tautan berkunci
 app.use('/api', require('./routes/system'));
 
 // Rute terautentikasi
@@ -38,6 +39,7 @@ const { collabRouter, collabMisc } = require('./routes/collab');
 const { evaluationRouter, evaluationMisc } = require('./routes/evaluation');
 const { reportRouter, reportMisc } = require('./routes/reports');
 const { applicationRouter, applicationMisc } = require('./routes/applications');
+const { displayRouter } = require('./routes/display');
 
 app.use('/api/users', requireAuth, require('./routes/users'));
 app.use('/api/join', requireAuth, require('./routes/join'));
@@ -49,7 +51,7 @@ app.use('/api/scenario-objectives', requireAuth, objRouter);
 app.use('/api/scenario-injects', requireAuth, injRouter);
 app.use('/api/generator', requireAuth, genRouter);
 // applicationRouter lebih dulu agar /api/exercises/open tidak tertangkap /:id
-app.use('/api/exercises', requireAuth, applicationRouter, exerciseRouter, collabRouter, evaluationRouter, reportRouter);
+app.use('/api/exercises', requireAuth, applicationRouter, displayRouter, exerciseRouter, collabRouter, evaluationRouter, reportRouter);
 app.use('/api', requireAuth, applicationMisc, exerciseMisc, collabMisc, evaluationMisc, reportMisc);
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Endpoint tidak ditemukan' }));

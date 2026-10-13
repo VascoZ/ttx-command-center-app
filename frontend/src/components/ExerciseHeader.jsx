@@ -1,7 +1,47 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { useAction, useConfirm, Icon, Modal, Field, StatusPill } from '../ui';
+import { useAction, useConfirm, useToast, Icon, Modal, Field, StatusPill } from '../ui';
+import { copyText } from '../pages/OrgTeams';
+
+function DisplayModal({ ex, onClose }) {
+  const [run, busy] = useAction();
+  const confirm = useConfirm();
+  const toast = useToast();
+  const [key, setKey] = useState(ex.display_key || null);
+  const link = key ? `${window.location.origin}/display/${key}` : null;
+  const create = async () => {
+    if (key && !(await confirm('Buat tautan baru? Tautan lama langsung tidak berlaku (layar yang memakainya perlu dibuka ulang).', { confirmLabel: 'Buat baru' }))) return;
+    const r = await run(() => api.post(`/exercises/${ex.id}/display-key`), 'Tautan layar dibuat');
+    if (r) setKey(r.display_key);
+  };
+  const revoke = async () => {
+    if (!(await confirm('Cabut tautan layar? Layar yang sedang menampilkannya akan berhenti diperbarui.', { danger: true, confirmLabel: 'Cabut' }))) return;
+    if (await run(() => api.del(`/exercises/${ex.id}/display-key`), 'Tautan layar dicabut')) setKey(null);
+  };
+  const copy = async () => toast((await copyText(link)) ? { title: 'Tautan disalin', kind: 'good' } : { title: 'Gagal menyalin', body: 'Salin manual.', kind: 'bad' });
+  return (
+    <Modal title="Layar penonton" onClose={onClose} footer={<button className="btn" onClick={onClose}>Tutup</button>}>
+      <p className="small muted">
+        Tampilan besar untuk proyektor/TV atau penonton: jam simulasi, progres tiap instansi, timeline inject (tanpa isi),
+        pernyataan publik, dan aktivitas terbaru. Isi inject, isi keputusan, catatan evaluator, dan nama peserta tidak ditampilkan.
+      </p>
+      <a className="btn btn-primary" href={`/exercises/${ex.id}/display`} target="_blank" rel="noreferrer"><Icon name="eye" /> Buka layar (akun Anda)</a>
+      <Field label="Tautan tanpa login (untuk TV/proyektor atau penonton)" hint="Siapa pun yang memegang tautan ini dapat melihat layar. Cabut setelah latihan selesai.">
+        {link ? (
+          <div className="row nowrap-row">
+            <input className="input grow mono small" readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Tautan layar" />
+            <button className="btn" onClick={copy}><Icon name="copy" /> Salin</button>
+          </div>
+        ) : <div className="small muted">Belum ada tautan aktif.</div>}
+      </Field>
+      <div className="row">
+        <button className="btn" disabled={busy} onClick={create}>{key ? 'Buat tautan baru' : 'Buat tautan'}</button>
+        {key && <button className="btn btn-ghost" disabled={busy} onClick={revoke}>Cabut tautan</button>}
+      </div>
+    </Modal>
+  );
+}
 import { fmtSim, fmtDuration } from '../format';
 
 export default function ExerciseHeader({ ex, state, simNow, realSec, online, onChange }) {
@@ -64,6 +104,9 @@ export default function ExerciseHeader({ ex, state, simNow, realSec, online, onC
         <div><div className="lbl">KECEPATAN</div><div className="val">{state ? Number(state.speed) : 1}×</div></div>
         <div><div className="lbl">ONLINE</div><div className="val">{online.length}</div></div>
       </div>
+      {ex.me.is_staff && (
+        <button className="btn btn-ghost no-print" onClick={() => setModal('display')} title="Layar penonton"><Icon name="eye" /> Layar</button>
+      )}
       {fac && (
         <div className="row no-print">
           {status === 'draft' && (
@@ -103,6 +146,11 @@ export default function ExerciseHeader({ ex, state, simNow, realSec, online, onC
         <Link className="btn btn-primary no-print" to={`/exercises/${ex.id}/report`}><Icon name="report" /> Laporan AAR</Link>
       )}
 
+      {modal === 'display' && (fac ? <DisplayModal ex={ex} onClose={() => setModal(null)} /> : (
+        <Modal title="Layar penonton" onClose={() => setModal(null)} footer={<button className="btn" onClick={() => setModal(null)}>Tutup</button>}>
+          <a className="btn btn-primary" href={`/exercises/${ex.id}/display`} target="_blank" rel="noreferrer"><Icon name="eye" /> Buka layar penonton</a>
+        </Modal>
+      ))}
       {modal === 'broadcast' && (
         <Modal title="Broadcast ke semua peserta" onClose={() => setModal(null)}
           footer={<><button className="btn" onClick={() => setModal(null)}>Batal</button><button className="btn btn-primary" disabled={!text.trim() || busy} onClick={async () => { const r = await run(() => api.post(`/exercises/${ex.id}/broadcast`, { body: text }), 'Broadcast terkirim'); if (r) setModal(null); }}>Kirim</button></>}>
